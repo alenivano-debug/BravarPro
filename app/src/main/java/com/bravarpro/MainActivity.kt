@@ -462,5 +462,161 @@ fun BravarProApp() {
                             if (valid) {
                                 val scale = min(size.width, size.height) *
                                     0.62f / max(a, max(b, l * 0.55f)) * zoom
+                                
+                                fun project(p: P3): P2 {
+                                    val cy = cos(rotY)
+                                    val sy = sin(rotY)
+                                    val cx = cos(rotX)
+                                    val sx = sin(rotX)
 
+                                    val x1 = p.x * cy - p.z * sy
+                                    val z1 = p.x * sy + p.z * cy
+                                    val y1 = p.y * cx - z1 * sx
+                                    val z2 = p.y * sx + z1 * cx
+
+                                    val perspective = 700f / (700f + z2 * scale * 0.25f)
+
+                                    return P2(
+                                        size.width / 2f + x1 * scale * perspective,
+                                        size.height / 2f - y1 * scale * perspective,
+                                        z2
+                                    )
+                                }
+
+                                val w = a / 2f
+                                val h = b / 2f
+                                val d = l / 2f
+
+                                val outer = listOf(
+                                    P3(-w, -h, -d), P3(w, -h, -d),
+                                    P3(w, h, -d), P3(-w, h, -d),
+                                    P3(-w, -h, d), P3(w, -h, d),
+                                    P3(w, h, d), P3(-w, h, d)
+                                )
+
+                                val innerW = w - t
+                                val innerH = h - t
+
+                                val inner = listOf(
+                                    P3(-innerW, -innerH, -d),
+                                    P3(innerW, -innerH, -d),
+                                    P3(innerW, innerH, -d),
+                                    P3(-innerW, innerH, -d),
+                                    P3(-innerW, -innerH, d),
+                                    P3(innerW, -innerH, d),
+                                    P3(innerW, innerH, d),
+                                    P3(-innerW, innerH, d)
+                                )
+
+                                val po = outer.map { project(it) }
+                                val pi = inner.map { project(it) }
+
+                                fun polygon(points: List<P2>, color: Color) {
+                                    val path = Path().apply {
+                                        moveTo(points[0].x, points[0].y)
+                                        for (i in 1 until points.size) {
+                                            lineTo(points[i].x, points[i].y)
+                                        }
+                                        close()
+                                    }
+                                    drawPath(path, color)
+                                }
+
+                                val faces = listOf(
+                                    listOf(0, 1, 5, 4),
+                                    listOf(1, 2, 6, 5),
+                                    listOf(2, 3, 7, 6),
+                                    listOf(3, 0, 4, 7)
+                                ).sortedByDescending { face ->
+                                    face.map { po[it].depth }.average()
+                                }
+
+                                faces.forEachIndexed { index, face ->
+                                    polygon(
+                                        face.map { po[it] },
+                                        listOf(
+                                            Color(0xFF607D8B),
+                                            Color(0xFF78909C),
+                                            Color(0xFF455A64),
+                                            Color(0xFF90A4AE)
+                                        )[index]
+                                    )
+                                }
+
+                                val edges = listOf(
+                                    0 to 1, 1 to 2, 2 to 3, 3 to 0,
+                                    4 to 5, 5 to 6, 6 to 7, 7 to 4,
+                                    0 to 4, 1 to 5, 2 to 6, 3 to 7
+                                )
+
+                                edges.forEach { (i, j) ->
+                                    drawLine(
+                                        Color.White,
+                                        Offset(po[i].x, po[i].y),
+                                        Offset(po[j].x, po[j].y),
+                                        2f
+                                    )
+                                }
+
+                                val nearOuter = (4..7).map { po[it] }
+                                val nearInner = (4..7).map { pi[it] }
+
+                                polygon(nearOuter, Color(0xFFB0BEC5))
+
+                                val hole = Path().apply {
+                                    moveTo(nearInner[0].x, nearInner[0].y)
+                                    nearInner.drop(1).forEach {
+                                        lineTo(it.x, it.y)
+                                    }
+                                    close()
+                                }
+
+                                drawPath(hole, Color(0xFF202832))
+
+                                for (i in 0..3) {
+                                    val j = (i + 1) % 4
+
+                                    drawLine(
+                                        Color.White,
+                                        Offset(nearOuter[i].x, nearOuter[i].y),
+                                        Offset(nearInner[i].x, nearInner[i].y),
+                                        2f
+                                    )
+
+                                    drawLine(
+                                        Color.White,
+                                        Offset(nearInner[i].x, nearInner[i].y),
+                                        Offset(nearInner[j].x, nearInner[j].y),
+                                        2f
+                                    )
+                                }
+                            }
+                        }
+
+                        if (valid) {
+                            Text(
+                                "Model: ${fmt(a.toDouble())} × " +
+                                "${fmt(b.toDouble())} × ${fmt(l.toDouble())} mm"
+                            )
+                            Text(
+                                "Unutarnji otvor: " +
+                                "${fmt((a - 2 * t).toDouble())} × " +
+                                "${fmt((b - 2 * t).toDouble())} mm"
+                            )
+                        }
+                    }
+                }
+
+                if (rezultat.isNotEmpty()) {
+                    HorizontalDivider()
+                    Text(
+                        "REZULTAT",
+                        style = MaterialTheme.typography.titleLarge
+                    )
+                    Text(rezultat)
+                }
+            }
+        }
+    }
+}
                             
