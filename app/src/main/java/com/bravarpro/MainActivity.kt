@@ -4,16 +4,22 @@ package com.bravarpro
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.background
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.input.KeyboardType
 import java.util.Locale
+import kotlin.math.*
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -22,8 +28,10 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-fun broj(s: String): Double = s.replace(",", ".").toDoubleOrNull() ?: 0.0
-fun format(n: Double): String = String.format(Locale.GERMANY, "%.2f", n)
+fun broj(s: String) = s.replace(",", ".").toDoubleOrNull() ?: 0.0
+fun fmt(n: Double) = String.format(Locale.GERMANY, "%.2f", n)
+
+data class Crta(val x1: Float, val y1: Float, val x2: Float, val y2: Float)
 
 @Composable
 fun Polje(naziv: String, value: String, promjena: (String) -> Unit) {
@@ -40,26 +48,28 @@ fun Polje(naziv: String, value: String, promjena: (String) -> Unit) {
 @Composable
 fun BravarProApp() {
     var ekran by remember { mutableStateOf("Početna") }
-
     var sirina by remember { mutableStateOf("40") }
     var visina by remember { mutableStateOf("40") }
     var stijenka by remember { mutableStateOf("2") }
     var duzina by remember { mutableStateOf("6") }
     var komada by remember { mutableStateOf("1") }
-
     var materijal by remember { mutableStateOf("Čelik") }
-    var plocina by remember { mutableStateOf("1000") }
-    var plocina2 by remember { mutableStateOf("500") }
+    var limD by remember { mutableStateOf("1000") }
+    var limS by remember { mutableStateOf("500") }
     var debljina by remember { mutableStateOf("5") }
-
     var sipka by remember { mutableStateOf("6000") }
     var rezovi by remember { mutableStateOf("1200, 800, 1500") }
-
     var cijenaMaterijala by remember { mutableStateOf("2") }
     var sati by remember { mutableStateOf("2") }
     var satnica by remember { mutableStateOf("15") }
     var ostalo by remember { mutableStateOf("0") }
 
+    var cadDuzina by remember { mutableStateOf("1000") }
+    var cadKut by remember { mutableStateOf("45") }
+    var pravokutnikA by remember { mutableStateOf("1000") }
+    var pravokutnikB by remember { mutableStateOf("500") }
+
+    val crte = remember { mutableStateListOf<Crta>() }
     var rezultat by remember { mutableStateOf("") }
 
     val gustoce = when (materijal) {
@@ -72,33 +82,30 @@ fun BravarProApp() {
         Column(
             modifier = Modifier.fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(18.dp),
+                .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text("BRAVAR PRO", style = MaterialTheme.typography.headlineLarge)
-            Text("Bravarski kalkulator")
+            Text("Bravarski kalkulator i tehničko crtanje")
 
             if (ekran == "Početna") {
                 listOf(
                     "Izračun profila i cijevi",
                     "Izračun težine materijala",
                     "Plan rezanja",
-                    "Izračun cijene"
+                    "Izračun cijene",
+                    "CAD – tehničko crtanje"
                 ).forEach { naziv ->
                     Button(
-                        onClick = {
-                            ekran = naziv
-                            rezultat = ""
-                        },
+                        onClick = { ekran = naziv; rezultat = "" },
                         modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(naziv)
-                    }
+                    ) { Text(naziv) }
                 }
             } else {
-                OutlinedButton(onClick = { ekran = "Početna"; rezultat = "" }) {
-                    Text("← Natrag")
-                }
+                OutlinedButton(onClick = {
+                    ekran = "Početna"
+                    rezultat = ""
+                }) { Text("← Natrag") }
 
                 Text(ekran, style = MaterialTheme.typography.headlineSmall)
 
@@ -116,23 +123,21 @@ fun BravarProApp() {
                             val t = broj(stijenka)
                             val l = broj(duzina)
                             val k = broj(komada)
-
-                            val povrsina = a * b -
-                                (a - 2 * t).coerceAtLeast(0.0) *
-                                (b - 2 * t).coerceAtLeast(0.0)
-
-                            val kgm = povrsina * 0.00785
+                            val pov = a * b -
+                                (a - 2*t).coerceAtLeast(0.0) *
+                                (b - 2*t).coerceAtLeast(0.0)
+                            val kgm = pov * 0.00785
                             rezultat = if (a > 0 && b > 0 && t > 0 &&
-                                t * 2 < minOf(a, b) && l > 0 && k > 0) {
-                                "Težina po metru: ${format(kgm)} kg\n" +
-                                "Ukupna duljina: ${format(l * k)} m\n" +
-                                "Ukupna težina: ${format(kgm * l * k)} kg"
-                            } else "Provjeri unesene dimenzije."
+                                t*2 < minOf(a,b) && l > 0 && k > 0)
+                                "Težina po metru: ${fmt(kgm)} kg\n" +
+                                "Ukupna duljina: ${fmt(l*k)} m\n" +
+                                "Ukupna težina: ${fmt(kgm*l*k)} kg"
+                            else "Provjeri dimenzije."
                         }) { Text("IZRAČUNAJ") }
                     }
 
                     "Izračun težine materijala" -> {
-                        Text("Vrsta materijala")
+                        Text("Materijal")
                         Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                             listOf("Čelik", "Inox", "Aluminij").forEach {
                                 FilterChip(
@@ -142,41 +147,38 @@ fun BravarProApp() {
                                 )
                             }
                         }
-                        Polje("Duljina lima (mm)", plocina) { plocina = it }
-                        Polje("Širina lima (mm)", plocina2) { plocina2 = it }
+                        Polje("Duljina lima (mm)", limD) { limD = it }
+                        Polje("Širina lima (mm)", limS) { limS = it }
                         Polje("Debljina lima (mm)", debljina) { debljina = it }
                         Polje("Broj komada", komada) { komada = it }
 
                         Button(onClick = {
-                            val volumen = broj(plocina) * broj(plocina2) *
-                                broj(debljina) * broj(komada)
-                            val kg = volumen * gustoce / 1000000000.0
+                            val volumen = broj(limD)*broj(limS)*
+                                broj(debljina)*broj(komada)
+                            val kg = volumen*gustoce/1000000000.0
                             rezultat = if (volumen > 0)
-                                "Materijal: $materijal\nUkupna težina: ${format(kg)} kg"
-                            else "Provjeri unesene dimenzije."
+                                "Materijal: $materijal\nTežina: ${fmt(kg)} kg"
+                            else "Provjeri dimenzije."
                         }) { Text("IZRAČUNAJ TEŽINU") }
                     }
 
                     "Plan rezanja" -> {
                         Polje("Duljina šipke (mm)", sipka) { sipka = it }
-                        Polje("Duljine komada u mm (odvojene zarezom)", rezovi) {
+                        Polje("Duljine komada (odvojene zarezom)", rezovi) {
                             rezovi = it
                         }
                         Button(onClick = {
                             val lista = rezovi.split(",")
-                                .mapNotNull { it.trim().toDoubleOrNull() }
-                                .filter { it > 0 }
+                                .mapNotNull { broj(it.trim()).takeIf { v -> v > 0 } }
                             val ukupno = lista.sum()
-                            val ostatak = broj(sipka) - ukupno
-                            rezultat = if (lista.isNotEmpty() && broj(sipka) > 0) {
+                            val ostatak = broj(sipka)-ukupno
+                            rezultat = if (lista.isNotEmpty() && broj(sipka)>0) {
                                 if (ostatak >= 0)
                                     "Broj komada: ${lista.size}\n" +
-                                    "Ukupno potrebno: ${format(ukupno)} mm\n" +
-                                    "Ostatak: ${format(ostatak)} mm\n" +
-                                    "Rezanje stane u jednu šipku."
-                                else
-                                    "Nedostaje ${format(-ostatak)} mm materijala.\n" +
-                                    "Komadi ne stanu u jednu šipku."
+                                    "Ukupno: ${fmt(ukupno)} mm\n" +
+                                    "Ostatak: ${fmt(ostatak)} mm\n" +
+                                    "Stane u jednu šipku."
+                                else "Nedostaje ${fmt(-ostatak)} mm."
                             } else "Provjeri unesene duljine."
                         }) { Text("IZRAČUNAJ REZANJE") }
                     }
@@ -190,24 +192,99 @@ fun BravarProApp() {
                         Polje("Ostali troškovi (€)", ostalo) { ostalo = it }
 
                         Button(onClick = {
-                            val materijalCijena = broj(cijenaMaterijala)
-                            val rad = broj(sati) * broj(satnica)
-                            val dodatno = broj(ostalo)
-                            val ukupno = materijalCijena + rad + dodatno
-                            rezultat = if (materijalCijena >= 0 && rad >= 0 && dodatno >= 0)
-                                "Materijal: ${format(materijalCijena)} €\n" +
-                                "Rad: ${format(rad)} €\n" +
-                                "Ostalo: ${format(dodatno)} €\n" +
-                                "UKUPNO: ${format(ukupno)} €"
-                            else "Provjeri unesene cijene."
+                            val m = broj(cijenaMaterijala)
+                            val r = broj(sati)*broj(satnica)
+                            val o = broj(ostalo)
+                            rezultat = if (m >= 0 && r >= 0 && o >= 0)
+                                "Materijal: ${fmt(m)} €\nRad: ${fmt(r)} €\n" +
+                                "Ostalo: ${fmt(o)} €\nUKUPNO: ${fmt(m+r+o)} €"
+                            else "Provjeri cijene."
                         }) { Text("IZRAČUNAJ CIJENU") }
+                    }
+
+                    "CAD – tehničko crtanje" -> {
+                        Text("Dodavanje linije u nacrt")
+                        Polje("Duljina linije (mm)", cadDuzina) {
+                            cadDuzina = it
+                        }
+                        Polje("Kut linije (stupnjevi)", cadKut) {
+                            cadKut = it
+                        }
+
+                        Button(onClick = {
+                            val l = broj(cadDuzina)
+                            val kut = broj(cadKut)
+                            if (l > 0 && kut in 0.0..360.0) {
+                                val zadnja = crte.lastOrNull()
+                                val x = zadnja?.x2 ?: 0f
+                                val y = zadnja?.y2 ?: 0f
+                                val px = l * 0.08
+                                val rad = Math.toRadians(kut)
+                                val nx = x + (px*cos(rad)).toFloat()
+                                val ny = y - (px*sin(rad)).toFloat()
+                                crte.add(Crta(x,y,nx,ny))
+                                rezultat = "Dodana linija: ${fmt(l)} mm\nKut: ${fmt(kut)}°"
+                            } else rezultat = "Unesi duljinu veću od 0 i kut od 0° do 360°."
+                        }, modifier = Modifier.fillMaxWidth()) {
+                            Text("DODAJ LINIJU")
+                        }
+
+                        Button(onClick = { crte.clear(); rezultat = "Nacrt je obrisan." },
+                            modifier = Modifier.fillMaxWidth()) {
+                            Text("OBRIŠI NACRT")
+                        }
+
+                        Text("SKICA – 2D", style = MaterialTheme.typography.titleLarge)
+                        Canvas(
+                            modifier = Modifier.fillMaxWidth()
+                                .height(300.dp)
+                                .background(Color(0xFFF4F4F4))
+                        ) {
+                            val korak = 25f
+                            var gx = 0f
+                            while (gx < size.width) {
+                                drawLine(Color.LightGray, Offset(gx,0f),
+                                    Offset(gx,size.height), 1f)
+                                gx += korak
+                            }
+                            var gy = 0f
+                            while (gy < size.height) {
+                                drawLine(Color.LightGray, Offset(0f,gy),
+                                    Offset(size.width,gy), 1f)
+                                gy += korak
+                            }
+                            val pomakX = size.width/2
+                            val pomakY = size.height/2
+                            crte.forEach {
+                                drawLine(
+                                    Color.Blue,
+                                    Offset(pomakX+it.x1,pomakY+it.y1),
+                                    Offset(pomakX+it.x2,pomakY+it.y2),
+                                    strokeWidth = 5f,
+                                    cap = StrokeCap.Round
+                                )
+                            }
+                        }
+
+                        Text("Izračun pravokutnika")
+                        Polje("Širina (mm)", pravokutnikA) { pravokutnikA = it }
+                        Polje("Visina (mm)", pravokutnikB) { pravokutnikB = it }
+
+                        Button(onClick = {
+                            val a = broj(pravokutnikA)
+                            val b = broj(pravokutnikB)
+                            rezultat = if (a > 0 && b > 0)
+                                "Dijagonala: ${fmt(sqrt(a*a+b*b))} mm\n" +
+                                "Kut dijagonale: ${fmt(Math.toDegrees(atan2(b,a)))}°"
+                            else "Unesi ispravne mjere."
+                        }) { Text("IZRAČUNAJ DIJAGONALU") }
                     }
                 }
 
                 if (rezultat.isNotEmpty()) {
                     HorizontalDivider()
                     Text("REZULTAT", style = MaterialTheme.typography.titleLarge)
-                    Text(rezultat, style = MaterialTheme.typography.bodyLarge)
+                    Text(rezultat)
                 }
             }
         }
